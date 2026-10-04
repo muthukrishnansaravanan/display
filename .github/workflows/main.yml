@@ -1,0 +1,33 @@
+name: Build APK
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          unzip -q *.zip
+          cd bros_led_app
+          if ! grep -q '^android.accept_sdk_license' buildozer.spec; then
+            sed -i 's/^# *android.accept_sdk_license.*//' buildozer.spec
+            sed -i '/^\[app\]/a android.accept_sdk_license = True' buildozer.spec
+          fi
+          ls
+
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: stable
+          workdir: bros_led_app
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BROS-LED-APK
+          path: ${{ steps.buildozer.outputs.filename }}
