@@ -31,6 +31,7 @@ jobs:
         run: |
           unzip -q *.zip
           cd bros_led_app
+          sed -i 's/^title *=.*/title = BROS LED Controller/' buildozer.spec
           sed -i 's/^requirements *=.*/requirements = python3,kivy==2.3.0,pillow,ffpyplayer/' buildozer.spec
           sed -i 's/^p4a.branch *=.*/p4a.branch = v2024.01.21/' buildozer.spec
           sed -i 's/^log_level *=.*/log_level = 2/' buildozer.spec
@@ -38,47 +39,21 @@ jobs:
           if ! grep -q '^android.accept_sdk_license' buildozer.spec; then
             sed -i '/^\[app\]/a android.accept_sdk_license = True' buildozer.spec
           fi
-          grep -n "^requirements\|^p4a\|^log_level\|^android" buildozer.spec
+          grep -n "^title\|^requirements\|^p4a\|^android" buildozer.spec
 
-      - name: Build APK (with intro video)
-        id: build1
-        continue-on-error: true
+      - name: Build APK
         working-directory: bros_led_app
         run: |
           set -o pipefail
-          buildozer -v android debug 2>&1 | tee ../build1.log
+          buildozer -v android debug 2>&1 | tee ../build.log
 
-      - name: Show error summary (attempt 1)
-        if: steps.build1.outcome == 'failure'
+      - name: Show error summary
+        if: failure()
         run: |
           echo "=========== ERROR LINES ==========="
-          grep -n -i -E "error|failed|fatal|undefined reference|No such file" build1.log | tail -40 || true
+          sed 's/\x1b\[[0-9;]*m//g' build.log | grep -n -i -E "Failed to flatten|BUILD FAILED|fatal error|Command failed|What went wrong" | tail -30 || true
           echo "=========== LAST 60 LINES ==========="
-          tail -60 build1.log
-
-      - name: Build APK (fallback without video)
-        id: build2
-        if: steps.build1.outcome == 'failure'
-        continue-on-error: true
-        working-directory: bros_led_app
-        run: |
-          set -o pipefail
-          sed -i 's/,ffpyplayer//' buildozer.spec
-          grep -n "^requirements" buildozer.spec
-          buildozer android clean || true
-          buildozer -v android debug 2>&1 | tee ../build2.log
-
-      - name: Show error summary (attempt 2)
-        if: steps.build1.outcome == 'failure' && steps.build2.outcome == 'failure'
-        run: |
-          echo "=========== ERROR LINES ==========="
-          grep -n -i -E "error|failed|fatal|undefined reference|No such file" build2.log | tail -40 || true
-          echo "=========== LAST 60 LINES ==========="
-          tail -60 build2.log
-
-      - name: Note when video is missing
-        if: steps.build1.outcome == 'failure' && steps.build2.outcome == 'success'
-        run: echo "::warning::APK was built WITHOUT the intro video (fallback). Logo animation will show instead."
+          tail -60 build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -92,5 +67,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BUILD-LOGS
-          path: build*.log
+          path: build.log
           if-no-files-found: ignore
